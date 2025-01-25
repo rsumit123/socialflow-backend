@@ -22,7 +22,7 @@ Return the response in JSON format with "score" and "feedback" fields only.""")
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-def get_ai_response(messages):
+def get_ai_response(messages, temperature=1.3):
     api_key = os.getenv('DEEPSEEK_API_KEY')
     api_url = os.getenv('DEEPSEEK_API_URL', 'https://api.deepseek.com/chat/completions')
     
@@ -34,7 +34,8 @@ def get_ai_response(messages):
     payload = {
         'model': 'deepseek-chat',
         'messages': messages,
-        'stream': False
+        'stream': False,
+        temperature: temperature
     }
     
     try:

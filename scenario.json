@@ -1,0 +1,31 @@
+[
+    {
+        "scenario": "The sun sets over a cozy neighborhood park, where people stroll along the pathways and children laugh on the playground. You sit on a bench, and a friendly stranger with a dog approaches, smiling. Mind if I join you? This little guy loves making new friends—what’s your name?"
+    },
+    {
+        "scenario": "The sun sets over a bustling outdoor café, the air filled with the aroma of coffee and the hum of conversation. You sit at a small table, and a friendly stranger across from you smiles warmly, holding a cup of tea. They lean in slightly and ask, So, do you come here often, or is this your first time?"
+    },
+    
+    {
+        "scenario": "You’re at a local coffee shop waiting for your drink, and the person next to you, who appears to be reading a book on travel, glances up and says: Have you been to any of the places mentioned in this book, or do you prefer to read about them instead?"
+
+    },
+    {
+        "scenario": "You're waiting in line at a coffee shop on a rainy afternoon, both you and the person next to you glance at the cloudy sky through the window. He Says: Looks like this rain isn't letting up anytime soon—do you usually enjoy rainy days?"
+    },
+    {
+        "scenario": "You're standing in line at a coffee shop, waiting for your order. The person next to you, holding a book with a vibrant cover, turns and says:That book looks interesting—are you into thrillers, or is this something different?"
+    },
+    {
+        "scenario": "You're at a friend's housewarming party, standing near the snack table, where a lively conversation is taking place around travel destinations. Someone asks: So, what’s the most interesting place you’ve traveled to recently?"
+    },
+    {
+        "scenario": "You’re at a coworking café, waiting for your coffee at the counter. A fellow customer, a friendly-looking individual holding a laptop bag, turns to you and says:Is this your first time here, or are you a regular?"
+    },
+    {
+        "scenario": "You're at a local coffee shop on a rainy afternoon, sharing a communal table with a stranger who seems to be sketching in a notebook. He says to you: Do you think rainy days make places like this feel cozier, or is it just me?"
+    },
+    {
+        "scenario": "A bustling coffee shop on a crisp autumn morning. Soft jazz plays in the background, and the aroma of freshly ground coffee fills the air. A friendly barista with a warm smile looks up and asks: What brings you out on such a beautiful morning?"
+    }
+]

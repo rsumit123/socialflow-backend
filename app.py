@@ -10,7 +10,9 @@ from dotenv import load_dotenv
 from auth import token_required
 import logging
 import datetime
-
+import json
+import random
+from pathlib import Path
 import re
 import json
 from markupsafe import escape
@@ -48,6 +50,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 INITIAL_PROMPT = os.getenv('INITIAL_PROMPT')
 SCENARIO_PROMPT = os.getenv('SCENARIO_PROMPT')
 
+# Define the path to the scenarios.json file
+SCENARIOS_FILE_PATH = Path(__file__).parent / 'scenario.json'
 
 
 # Initialize SQLAlchemy with the app
@@ -67,6 +71,23 @@ if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
+
+# Load scenarios from the JSON file at startup
+try:
+    with open(SCENARIOS_FILE_PATH, 'r') as file:
+        SCENARIOS = json.load(file)
+        logger.info(f"Loaded {len(SCENARIOS)} scenarios from scenarios.json.")
+except FileNotFoundError:
+    logger.error(f"scenarios.json file not found at {SCENARIOS_FILE_PATH}.")
+    SCENARIOS = []
+except json.JSONDecodeError as e:
+    logger.error(f"Error decoding JSON from scenarios.json: {e}")
+    SCENARIOS = []
+
+
+
+
 
 # Handle the OPTIONS request manually to avoid 404 errors
 @app.before_request
@@ -172,6 +193,8 @@ def protected_route(current_user):
 
 
 
+# app.py (continued)
+
 @app.route('/api/chat/sessions/', methods=['POST'])
 @token_required
 def create_chat_session(current_user):
@@ -181,20 +204,17 @@ def create_chat_session(current_user):
         db.session.add(new_session)
         db.session.commit()
 
-        
-        scenario_message = {
-            "role": "system",
-            "content": SCENARIO_PROMPT
-        }
-        custom_scenario = get_ai_response([scenario_message])
+        # 2. Select a random scenario from the loaded scenarios
+        if not SCENARIOS:
+            logger.error("No scenarios available to select.")
+            return jsonify({"error": "No scenarios available. Please contact support."}), 500
 
-        logger.info(f"RECEIVED CUSTOM SCENARIO AS {custom_scenario}")
+        selected_scenario = random.choice(SCENARIOS)['scenario']
+        logger.info(f"Selected Scenario: {selected_scenario}")
 
-        # 3. Format the INITIAL_PROMPT with the generated scenario
-        formatted_initial_prompt = INITIAL_PROMPT.format(custom_scenario=custom_scenario)
-
-        logger.info(f"FORMATTED INITIAL PROMPT AS {formatted_initial_prompt}")
-
+        # 3. Format the INITIAL_PROMPT with the selected scenario
+        formatted_initial_prompt = INITIAL_PROMPT.format(custom_scenario=selected_scenario)
+        logger.info(f"Formatted Initial Prompt: {formatted_initial_prompt}")
 
         # 4. Save the formatted system message with the custom scenario
         system_message = ChatMessage(
@@ -212,6 +232,7 @@ def create_chat_session(current_user):
 
         # 6. Get AI response to the initial prompt
         ai_response = get_ai_response(messages)
+        logger.info(f"AI Response: {ai_response}")
 
         # 7. Save AI response
         ai_msg = ChatMessage(
@@ -226,7 +247,7 @@ def create_chat_session(current_user):
             "message": "Chat session created successfully",
             "session_id": new_session.id,
             "ai_response": ai_msg.content,
-            "custom_scenario": custom_scenario  # Optional: Return the scenario to the user
+            "custom_scenario": selected_scenario  # Optional: Return the scenario to the user
         }), 201
 
     except Exception as e:
@@ -278,7 +299,7 @@ def send_chat_message(current_user, session_id):
         user_message_count = len(user_messages)
 
         # If user has sent less than 10 messages, continue the chat
-        if user_message_count < 2:
+        if user_message_count < 10:
             # Retrieve all messages in the session to send to AI (excluding system messages)
             messages = [
                 {"role": msg.sender, "content": msg.content}
@@ -311,7 +332,7 @@ def send_chat_message(current_user, session_id):
                 "ai_response": ai_msg.content
             }), 200
 
-        elif user_message_count == 2 or user_message_count > 2:
+        elif user_message_count == 10 or user_message_count > 10:
             # Trigger evaluation
             evaluation_result = evaluate_user_skills(user_messages)
 
