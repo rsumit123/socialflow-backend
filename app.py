@@ -375,7 +375,7 @@ def send_chat_message(current_user, session_id):
 
             return jsonify({
                 "user_message": user_msg.content,
-                "ai_response": "You have completed the game! Your performance has been evaluated.",
+                "ai_response": "You have completed the game! Your performance has been evaluated. Go to Report Cards to view your Score.",
                 "evaluation": {
                     "engagement_score": report_card.engagement_score,
                     "engagement_feedback": report_card.engagement_feedback,
