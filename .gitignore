@@ -91,3 +91,5 @@ ENV/
 instance/*.db
 
 *.db
+
+migrations/*
