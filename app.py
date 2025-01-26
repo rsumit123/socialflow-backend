@@ -332,7 +332,7 @@ def send_chat_message(current_user, session_id):
                 "ai_response": ai_msg.content
             }), 200
 
-        elif user_message_count == 10 or user_message_count > 10:
+        elif user_message_count == 10 or user_message_count > 10 or 'end chat' in user_message.lower():
             # Trigger evaluation
             evaluation_result = evaluate_user_skills(user_messages)
 
