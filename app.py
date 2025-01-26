@@ -299,7 +299,7 @@ def send_chat_message(current_user, session_id):
         user_message_count = len(user_messages)
 
         # If user has sent less than 10 messages, continue the chat
-        if user_message_count < 10:
+        if user_message_count < 10 or not ('end chat' in user_message.lower() or 'end this chat' in user_message.lower()):
             # Retrieve all messages in the session to send to AI (excluding system messages)
             messages = [
                 {"role": msg.sender, "content": msg.content}
@@ -332,7 +332,7 @@ def send_chat_message(current_user, session_id):
                 "ai_response": ai_msg.content
             }), 200
 
-        elif user_message_count == 10 or user_message_count > 10 or 'end chat' in user_message.lower():
+        elif user_message_count == 10 or user_message_count > 10 or 'end chat' in user_message.lower() or 'end this chat' in user_message.lower():
             # Trigger evaluation
             evaluation_result = evaluate_user_skills(user_messages)
 
