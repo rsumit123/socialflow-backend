@@ -13,12 +13,7 @@ load_dotenv()
 logger = logging.getLogger('flask_app')
 logger.setLevel(logging.DEBUG)  # Set the desired logging level
 
-EVALUATION_PROMPT = os.getenv('EVALUATION_PROMPT', """Evaluate the following user's messages for their small talk skills and social skills. Provide a score out of 100 and constructive feedback.
-
-User Messages:
-{user_messages}
-
-Return the response in JSON format with "score" and "feedback" fields only.""")
+EVALUATION_PROMPT = os.getenv('EVALUATION_PROMPT')
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -35,7 +30,7 @@ def get_ai_response(messages, temperature=1.3):
         'model': 'deepseek-chat',
         'messages': messages,
         'stream': False,
-        temperature: temperature
+        temperature:temperature
     }
     
     try:
@@ -54,6 +49,8 @@ def evaluate_user_skills(user_messages):
     """
     Sends the user's messages to the AI for evaluation and returns the AI's response.
     """
+    logger.info(f"GOT USER MESSAGES AS {user_messages}")
+    user_messages = [str(msg) for msg in user_messages]
     evaluation_prompt_formatted = EVALUATION_PROMPT.format(
         user_messages="\n".join(user_messages)
     )

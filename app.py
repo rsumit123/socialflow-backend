@@ -48,10 +48,12 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # app.py (after load_dotenv())
 INITIAL_PROMPT = os.getenv('INITIAL_PROMPT')
+INITIAL_PROMPT_V2 = os.getenv('INITIAL_PROMPT_V2')
 SCENARIO_PROMPT = os.getenv('SCENARIO_PROMPT')
 
 # Define the path to the scenarios.json file
 SCENARIOS_FILE_PATH = Path(__file__).parent / 'scenario.json'
+ROLE_SCENARIO_FILE_PATH = Path(__file__).parent / 'role_scenario.json'
 
 
 # Initialize SQLAlchemy with the app
@@ -78,6 +80,9 @@ try:
     with open(SCENARIOS_FILE_PATH, 'r') as file:
         SCENARIOS = json.load(file)
         logger.info(f"Loaded {len(SCENARIOS)} scenarios from scenarios.json.")
+    with open(ROLE_SCENARIO_FILE_PATH, 'r') as file:
+        ROLE_SCENARIOS = json.load(file)
+        logger.info(f"Loaded {len(ROLE_SCENARIOS)} scenarios from scenarios.json.")
 except FileNotFoundError:
     logger.error(f"scenarios.json file not found at {SCENARIOS_FILE_PATH}.")
     SCENARIOS = []
@@ -255,6 +260,70 @@ def create_chat_session(current_user):
         db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
+
+
+@app.route('/api/v2/chat/sessions/', methods=['POST'])
+@token_required
+def create_chat_session_v2(current_user):
+    try:
+        # 1. Create a new ChatSession
+        new_session = ChatSession(user_id=current_user.id)
+        db.session.add(new_session)
+        db.session.commit()
+
+        # 2. Select a random scenario from the loaded scenarios
+        if not SCENARIOS:
+            logger.error("No scenarios available to select.")
+            return jsonify({"error": "No scenarios available. Please contact support."}), 500
+
+        selected= random.choice(ROLE_SCENARIOS)
+        selected_scenario, selected_role, ai_name  = selected["scenario"], selected["ai_role"], selected["ai_name"]
+        logger.info(f"Selected Scenario: {selected_scenario}")
+
+        # 3. Format the INITIAL_PROMPT with the selected scenario
+        formatted_initial_prompt = INITIAL_PROMPT_V2.format(custom_role=selected_role, name=ai_name)
+
+        logger.info(f"Formatted Initial Prompt: {formatted_initial_prompt}")
+
+        # 4. Save the formatted system message with the custom scenario
+        system_message = ChatMessage(
+            session_id=new_session.id,
+            sender='system',
+            content=formatted_initial_prompt
+        )
+        db.session.add(system_message)
+        db.session.commit()
+
+        # 5. Prepare messages for AI (including the formatted system message)
+        messages = [
+            {"role": "system", "content": formatted_initial_prompt}
+        ]
+
+        # 6. Get AI response to the initial prompt
+        ai_response = get_ai_response(messages)
+        logger.info(f"AI Response: {ai_response}")
+
+        # 7. Save AI response
+        ai_msg = ChatMessage(
+            session_id=new_session.id,
+            sender='assistant',
+            content=ai_response
+        )
+        db.session.add(ai_msg)
+        db.session.commit()
+
+        return jsonify({
+            "message": "Chat session created successfully",
+            "session_id": new_session.id,
+            "ai_response": ai_msg.content,
+            "custom_scenario": selected_scenario  # Optional: Return the scenario to the user
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Error creating chat session: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
 # app.py (add below existing routes)
 
 # app.py (continued)
@@ -273,6 +342,9 @@ def send_chat_message(current_user, session_id):
 
     # Retrieve the chat session
     session = ChatSession.query.filter_by(id=session_id, user_id=current_user.id).first()
+    
+    
+    
     if not session:
         return jsonify({"error": "Chat session not found"}), 404
 
@@ -287,6 +359,7 @@ def send_chat_message(current_user, session_id):
             sender='user',
             content=user_message
         )
+        
         db.session.add(user_msg)
         db.session.commit()
 
@@ -294,6 +367,14 @@ def send_chat_message(current_user, session_id):
         user_messages = [
             msg.content for msg in session.messages if msg.sender == 'user'
         ]
+
+        
+
+        system_msg = [msg.content for msg in session.messages if msg.sender == 'system']
+
+        system_msg = " ".join(system_msg)
+
+        logger.info(f" SYSTEM MESSAGE: {system_msg}")
 
         # Count the number of user messages
         user_message_count = len(user_messages)
@@ -307,8 +388,10 @@ def send_chat_message(current_user, session_id):
                 if msg.sender in ['user', 'assistant']
             ]
 
+            logger.info(f"ALL MESSAGES {messages}")
+
             # Prepend the system message for context
-            messages.insert(0, {"role": "system", "content": INITIAL_PROMPT})
+            messages.insert(0, {"role": "system", "content": system_msg})
 
             # Optionally, limit to the last N messages for context
             MAX_MESSAGES = 20
@@ -334,7 +417,12 @@ def send_chat_message(current_user, session_id):
 
         elif user_message_count == 10 or user_message_count > 10 or 'end chat' in user_message.lower() or 'end this chat' in user_message.lower():
             # Trigger evaluation
-            evaluation_result = evaluate_user_skills(user_messages)
+            ai_messages = [
+            msg.content for msg in session.messages if msg.sender == 'assistant'
+            ]
+
+            prompt_to_send = [{"ai_message": i, "user_message": j} for i, j in zip(ai_messages, user_messages)]
+            evaluation_result = evaluate_user_skills(prompt_to_send)
 
             # Parse the AI's response
             evaluation_data = parse_evaluation_result(evaluation_result)
