@@ -89,9 +89,9 @@ def parse_evaluation_result(evaluation_text):
     try:
         result = json.loads(evaluation_text.strip('json').strip('`').strip().replace('json',''))
         logger.info(f"RESULT {result}")
-        score = result.get('score')
-        feedback = result.get('feedback')
-        result = {"total_score": score, "feedback": feedback}
+        # score = result.get('score')
+        # feedback = result.get('feedback')
+        # result = {"total_score": score, "feedback": feedback}
 
         logger.info(f"==>RESULT {result}" )
 

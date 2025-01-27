@@ -50,6 +50,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 INITIAL_PROMPT = os.getenv('INITIAL_PROMPT')
 INITIAL_PROMPT_V2 = os.getenv('INITIAL_PROMPT_V2')
 SCENARIO_PROMPT = os.getenv('SCENARIO_PROMPT')
+CLIENT_URL = os.getenv('CLIENT_URL')
 
 # Define the path to the scenarios.json file
 SCENARIOS_FILE_PATH = Path(__file__).parent / 'scenario.json'
@@ -219,7 +220,9 @@ def create_chat_session(current_user):
 
         # 3. Format the INITIAL_PROMPT with the selected scenario
         formatted_initial_prompt = INITIAL_PROMPT.format(custom_scenario=selected_scenario)
-        logger.info(f"Formatted Initial Prompt: {formatted_initial_prompt}")
+        # logger.info(f"Formatted Initial Prompt: {formatted_initial_prompt}")
+
+        logger.info("Saving chat message..........")
 
         # 4. Save the formatted system message with the custom scenario
         system_message = ChatMessage(
@@ -234,6 +237,8 @@ def create_chat_session(current_user):
         messages = [
             {"role": "system", "content": formatted_initial_prompt}
         ]
+
+        logger.info("Getting AI Response.......")
 
         # 6. Get AI response to the initial prompt
         ai_response = get_ai_response(messages)
@@ -298,6 +303,7 @@ def create_chat_session_v2(current_user):
         messages = [
             {"role": "system", "content": formatted_initial_prompt}
         ]
+        logger.info("Getting AI Response.......")
 
         # 6. Get AI response to the initial prompt
         ai_response = get_ai_response(messages)
@@ -349,8 +355,8 @@ def send_chat_message(current_user, session_id):
         return jsonify({"error": "Chat session not found"}), 404
 
     # Check if a ReportCard already exists for this session
-    if session.report_card:
-        return jsonify({"error": "This session has already been evaluated."}), 400
+    # if session.report_card:
+    #     return jsonify({"error": "This session has already been evaluated."}), 400
 
     try:
         # Save user message
@@ -369,7 +375,6 @@ def send_chat_message(current_user, session_id):
         ]
 
         
-
         system_msg = [msg.content for msg in session.messages if msg.sender == 'system']
 
         system_msg = " ".join(system_msg)
@@ -379,47 +384,49 @@ def send_chat_message(current_user, session_id):
         # Count the number of user messages
         user_message_count = len(user_messages)
 
-        # If user has sent less than 10 messages, continue the chat
-        if user_message_count < 10 and not ('end chat' in user_message.lower() or 'end this chat' in user_message.lower()):
-            # Retrieve all messages in the session to send to AI (excluding system messages)
-            messages = [
+        # Retrieve all messages in the session to send to AI (excluding system messages)
+        messages = [
                 {"role": msg.sender, "content": msg.content}
                 for msg in session.messages
                 if msg.sender in ['user', 'assistant']
             ]
 
-            logger.info(f"ALL MESSAGES {messages}")
+        logger.info(f"ALL MESSAGES {messages}")
 
-            # Prepend the system message for context
-            messages.insert(0, {"role": "system", "content": system_msg})
+        # Prepend the system message for context
+        messages.insert(0, {"role": "system", "content": system_msg})
 
-            # Optionally, limit to the last N messages for context
-            MAX_MESSAGES = 20
-            if len(messages) > MAX_MESSAGES:
-                messages = messages[-MAX_MESSAGES:]
+        # Optionally, limit to the last N messages for context
+        MAX_MESSAGES = 20
+        if len(messages) > MAX_MESSAGES:
+            messages = messages[-MAX_MESSAGES:]
 
-            # Get AI response
-            ai_response = get_ai_response(messages)
+        # Get AI response
+        ai_response = get_ai_response(messages)
 
-            # Save AI response
-            ai_msg = ChatMessage(
-                session_id=session.id,
-                sender='assistant',
-                content=ai_response
-            )
-            db.session.add(ai_msg)
-            db.session.commit()
+        # Save AI response
+        ai_msg = ChatMessage(
+            session_id=session.id,
+            sender='assistant',
+            content=ai_response
+        )
+        db.session.add(ai_msg)
+        db.session.commit()
 
+
+        # If user has sent less than 10 messages, continue the chat
+        if user_message_count < 10 and not ('end chat' in user_message.lower() or 'end this chat' in user_message.lower()):
+            
             return jsonify({
                 "user_message": user_msg.content,
                 "ai_response": ai_msg.content
             }), 200
 
-        elif user_message_count == 10 or user_message_count > 10 or 'end chat' in user_message.lower() or 'end this chat' in user_message.lower():
+        elif user_message_count == 10: 
             # Trigger evaluation
             ai_messages = [
-            msg.content for msg in session.messages if msg.sender == 'assistant'
-            ]
+                msg.content for msg in session.messages if msg.sender == 'assistant'
+                ]
 
             prompt_to_send = [{"ai_message": i, "user_message": j} for i, j in zip(ai_messages, user_messages)]
             evaluation_result = evaluate_user_skills(prompt_to_send)
@@ -429,37 +436,73 @@ def send_chat_message(current_user, session_id):
 
             logger.info(f"Evaluation ===> {evaluation_data}")
 
-            # Assign default values if parsing failed
-            score = evaluation_data.get('total_score', 0)
-            feedback = ""
-            # Combine all feedbacks
-            if evaluation_data.get('feedback', None):
-                feedback += f"**Feedback:** {evaluation_data['feedback']}\n\n"
-            if evaluation_data.get('engagement_feedback', None):
-                feedback += f"**Engagement:** {evaluation_data['engagement_feedback']}\n\n"
-            if evaluation_data.get('humor_feedback', None):
-                feedback += f"**Humor:** {evaluation_data['humor_feedback']}\n\n"
-            if evaluation_data.get('empathy_feedback', None):
-                feedback += f"**Empathy:** {evaluation_data['empathy_feedback']}\n\n"
+            feedback = evaluation_data.get('feedback', "Empty")
 
-            if not feedback:
-                feedback = "There was an error evaluating your performance."
+            engagement_score = evaluation_data.get('engagement_score', 0)
+            empathy_score = evaluation_data.get('empathy_score', 0)
+            humor_score = evaluation_data.get('humor_score', 0)
+            total_score = sum([int(i) for i in [engagement_score, empathy_score, humor_score]])//3
+
+            
+            logger.info(f"engagement score {engagement_score} feedback {feedback}")
 
             # Save the evaluation in ReportCard
             report_card = ReportCard(
                 session_id=session.id,
                 user_id=current_user.id,
-                engagement_score=evaluation_data.get('engagement_score'),
-                humor_score=evaluation_data.get('humor_score'),
-                empathy_score=evaluation_data.get('empathy_score'),
-                total_score=evaluation_data.get('total_score'),
-                engagement_feedback=evaluation_data.get('engagement_feedback'),
-                humor_feedback=evaluation_data.get('humor_feedback'),
-                empathy_feedback=evaluation_data.get('empathy_feedback'),
-                feedback = evaluation_data.get('feedback')
+                engagement_score=int(engagement_score),
+                humor_score=int(humor_score),
+                empathy_score=int(empathy_score),
+                total_score=total_score,
+                engagement_feedback="",
+                humor_feedback="",
+                empathy_feedback="",
+                feedback =feedback
             )
             db.session.add(report_card)
             db.session.commit()
+
+        elif 'end chat' in user_message.lower() or 'end this chat' in user_message.lower():
+
+            ai_messages = [
+                msg.content for msg in session.messages if msg.sender == 'assistant'
+                ]
+
+            prompt_to_send = [{"ai_message": i, "user_message": j} for i, j in zip(ai_messages, user_messages)]
+            evaluation_result = evaluate_user_skills(prompt_to_send)
+
+            # Parse the AI's response
+            evaluation_data = parse_evaluation_result(evaluation_result)
+
+            logger.info(f"Evaluation ===> {evaluation_data}")
+
+            feedback = evaluation_data.get('feedback', "Empty")
+
+            engagement_score = evaluation_data.get('engagement_score', 0)
+            empathy_score = evaluation_data.get('empathy_score', 0)
+            humor_score = evaluation_data.get('humor_score', 0)
+            total_score = sum([int(i) for i in [engagement_score, empathy_score, humor_score]])//3
+
+            
+            logger.info(f"engagement score {engagement_score} feedback {feedback}")
+
+            # Save the evaluation in ReportCard
+            report_card = ReportCard(
+                session_id=session.id,
+                user_id=current_user.id,
+                engagement_score=int(engagement_score),
+                humor_score=int(humor_score),
+                empathy_score=int(empathy_score),
+                total_score=total_score,
+                engagement_feedback="",
+                humor_feedback="",
+                empathy_feedback="",
+                feedback =feedback
+            )
+            db.session.add(report_card)
+            db.session.commit()
+        
+            
 
             return jsonify({
                 "user_message": user_msg.content,
@@ -473,13 +516,37 @@ def send_chat_message(current_user, session_id):
                     "empathy_feedback": report_card.empathy_feedback,
                     "total_score": report_card.total_score,
                     "feedback_summary": feedback,
-                    "feedback": feedback
+                    "feedback": feedback,
+                    "report_link": f"{CLIENT_URL}/report-cards/{session_id}"
                 }
             }), 200
+        # else:
+        #     return jsonify({
+        #         "user_message": user_msg.content,
+        #         "ai_response": ai_msg.content,
+        #         "evaluation": {
+        #             "engagement_score": report_card.engagement_score,
+        #             "engagement_feedback": report_card.engagement_feedback,
+        #             "humor_score": report_card.humor_score,
+        #             "humor_feedback": report_card.humor_feedback,
+        #             "empathy_score": report_card.empathy_score,
+        #             "empathy_feedback": report_card.empathy_feedback,
+        #             "total_score": report_card.total_score,
+        #             "feedback_summary": feedback,
+        #             "feedback": feedback,
+        #             "report_link": f"{CLIENT_URL}/report-cards/{session_id}"
+        #         }
+        #     }), 200
+
 
         else:
             # More than 10 messages; prevent further messages or allow based on requirements
-            return jsonify({"error": "This session has already been evaluated."}), 400
+            logger.info("Report already generated...")
+            # return jsonify({"error": "This session has already been evaluated."}), 400
+            return jsonify({
+                    "user_message": user_msg.content,
+                    "ai_response": ai_msg.content
+                }), 200
 
     except Exception as e:
         logger.error(f"Error handling chat message: {e}")
@@ -488,7 +555,7 @@ def send_chat_message(current_user, session_id):
 
 
 
-@app.route('/api/chat/sessions/<session_id>/report_card/', methods=['GET'])
+@app.route('/api/chat/sessions/<session_id>/report-card/', methods=['GET'])
 @token_required
 def get_report_card(current_user, session_id):
     # Retrieve the chat session
@@ -497,14 +564,21 @@ def get_report_card(current_user, session_id):
         return jsonify({"error": "Chat session not found"}), 404
 
     # Retrieve the report card
-    report_card = ReportCard.query.filter_by(session_id=session.id, user_id=current_user.id).first()
-    if not report_card:
+    rc = ReportCard.query.filter_by(session_id=session.id, user_id=current_user.id).first()
+    if not rc:
         return jsonify({"error": "Report card not found for this session."}), 404
 
     return jsonify({
-        "score": report_card.score,
-        "feedback": report_card.feedback,
-        "created_at": report_card.created_at.isoformat()
+        "session_id": rc.session_id,
+                "engagement_score": rc.engagement_score,
+                "engagement_feedback": rc.engagement_feedback,
+                "humor_score": rc.humor_score,
+                "humor_feedback": rc.humor_feedback,
+                "empathy_score": rc.empathy_score,
+                "empathy_feedback": rc.empathy_feedback,
+                "feedback": rc.feedback,
+                "total_score": rc.total_score,
+                "created_at": rc.created_at.isoformat()
     }), 200
 
 
