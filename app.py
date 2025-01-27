@@ -379,7 +379,7 @@ def send_chat_message(current_user, session_id):
 
         system_msg = " ".join(system_msg)
 
-        logger.info(f" SYSTEM MESSAGE: {system_msg}")
+        # logger.info(f" SYSTEM MESSAGE: {system_msg}")
 
         # Count the number of user messages
         user_message_count = len(user_messages)
@@ -391,7 +391,7 @@ def send_chat_message(current_user, session_id):
                 if msg.sender in ['user', 'assistant']
             ]
 
-        logger.info(f"ALL MESSAGES {messages}")
+        # logger.info(f"ALL MESSAGES {messages}")
 
         # Prepend the system message for context
         messages.insert(0, {"role": "system", "content": system_msg})
@@ -434,7 +434,7 @@ def send_chat_message(current_user, session_id):
             # Parse the AI's response
             evaluation_data = parse_evaluation_result(evaluation_result)
 
-            logger.info(f"Evaluation ===> {evaluation_data}")
+            # logger.info(f"Evaluation ===> {evaluation_data}")
 
             feedback = evaluation_data.get('feedback', "Empty")
 
@@ -501,7 +501,7 @@ def send_chat_message(current_user, session_id):
             total_score = sum([int(i) for i in [engagement_score, empathy_score, humor_score]])//3
 
             
-            logger.info(f"engagement score {engagement_score} feedback {feedback}")
+            # logger.info(f"engagement score {engagement_score} feedback {feedback}")
 
             # Save the evaluation in ReportCard
             report_card = ReportCard(
