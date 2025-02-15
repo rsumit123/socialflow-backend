@@ -160,6 +160,41 @@ def register():
 def health_check():
     return jsonify({"message": "Server is running"}), 200
 
+
+@app.route('/api/auth/guest/', methods=['POST', 'OPTIONS'])
+def guest_login():
+    if request.method == 'OPTIONS':
+        # Handle preflight OPTIONS request
+        return '', 200
+
+    # Generate a unique guest identifier
+    guest_id = str(uuid.uuid4())
+    guest_email = f"guest_{guest_id}@example.com"
+    
+    # Optionally, if you want to store guest status on the user, you might add an 'is_guest' field
+    # For now, we assume creating a new User record for each guest login.
+    guest_user = User.query.filter_by(email=guest_email).first()
+    if not guest_user:
+        guest_user = User(email=guest_email, password=b"")
+        # Set password empty or a default value
+        # Optionally, if your model has an 'is_guest' flag:
+        # guest_user.is_guest = True
+        db.session.add(guest_user)
+        db.session.commit()
+    
+    # Generate a JWT token that includes a 'guest' flag
+    token = jwt.encode({
+        'email': guest_email,
+        'guest': True,
+        'exp': datetime.datetime.utcnow() + timedelta(hours=24)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+    
+    return jsonify({
+        "message": "Guest login successful",
+        "token": token
+    }), 200
+
+
 # Login API endpoint
 @app.route('/api/auth/login/', methods=['POST', 'OPTIONS'])
 def login():
