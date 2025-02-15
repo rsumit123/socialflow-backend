@@ -1,7 +1,6 @@
 # models.py
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 import uuid
 
 db = SQLAlchemy()
@@ -21,6 +20,7 @@ class User(db.Model):
 class ChatSession(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    bot_id = db.Column(db.String(50), nullable=True)  # <-- New field to store the chosen bot
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(days=30))  # Optional
 

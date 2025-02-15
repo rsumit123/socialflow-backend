@@ -196,8 +196,76 @@ def login():
 def protected_route(current_user):
     return jsonify({"message": f"Hello, {current_user.email}!"}), 200
 
+@app.route('/api/chat/bots/', methods=['GET'])
+@token_required
+def get_bots(current):
+    return [{"bot_id":2,"bot_name": "Jenny","bot_description":"bot_description"},{"bot_id":1,"bot_name": "Vidya","bot_description":"sample description"}]
 
 
+
+@app.route('/api/chat/sessions/bot', methods=['POST'])
+@token_required
+def create_chat_session_with_bot(current_user):
+    try:
+        data = request.get_json()
+        bot_id = data.get("bot_id")
+        if not bot_id:
+            return jsonify({"error": "Missing 'bot_id' in request"}), 400
+
+        # 1. Create a new ChatSession with the bot_id
+        new_session = ChatSession(user_id=current_user.id, bot_id=bot_id)
+        db.session.add(new_session)
+        db.session.commit()
+
+        # (Optional) Select a random scenario as before.
+        if not SCENARIOS:
+            logger.error("No scenarios available to select.")
+            return jsonify({"error": "No scenarios available. Please contact support."}), 500
+        selected_scenario = random.choice(SCENARIOS)['scenario']
+        logger.info(f"Selected Scenario: {selected_scenario}")
+
+        # 2. Format the initial prompt.
+        # For bot sessions, you might want a slightly different prompt.
+        # Here we simply include the bot_id in the prompt.
+        formatted_initial_prompt = INITIAL_PROMPT.format(
+            custom_scenario=selected_scenario
+        ) + f"\n\n[Bot: {bot_id}]"
+        logger.info(f"Formatted Initial Prompt: {formatted_initial_prompt}")
+
+        # 3. Save the system message with the formatted prompt
+        system_message = ChatMessage(
+            session_id=new_session.id,
+            sender='system',
+            content=formatted_initial_prompt
+        )
+        db.session.add(system_message)
+        db.session.commit()
+
+        # 4. Prepare messages and get AI response as usual
+        messages = [{"role": "system", "content": formatted_initial_prompt}]
+        ai_response = get_ai_response(messages)
+        logger.info(f"AI Response: {ai_response}")
+
+        ai_msg = ChatMessage(
+            session_id=new_session.id,
+            sender='assistant',
+            content=ai_response
+        )
+        db.session.add(ai_msg)
+        db.session.commit()
+
+        return jsonify({
+            "message": "Chat session with bot created successfully",
+            "session_id": new_session.id,
+            "ai_response": ai_msg.content,
+            "custom_scenario": selected_scenario,
+            "bot_id": bot_id
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Error creating chat session with bot: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
 
 # app.py (continued)
 
@@ -326,7 +394,7 @@ def create_chat_session_v2(current_user):
         }), 201
 
     except Exception as e:
-        logger.error(f"Error creating chat session: {e}")
+        logger.exception(f"Error creating chat session: {e}")
         db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
