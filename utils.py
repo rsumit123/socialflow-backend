@@ -30,11 +30,11 @@ def get_ai_response(messages, temperature=1.3):
         'model': 'deepseek-chat',
         'messages': messages,
         'stream': False,
-        temperature:temperature
+        'temperature': temperature
     }
     
     try:
-        response = requests.post(api_url, headers=headers, json=payload)
+        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
         ai_message = data['choices'][0]['message']['content']
@@ -84,30 +84,49 @@ def parse_evaluation_result(evaluation_text):
         dict: A dictionary containing extracted scores and feedback.
     """
     
-    logger.info(f"EVALATION => {evaluation_text.strip('json').strip('`').strip().replace('json','')}")
+    # Clean markdown code fences from AI response
+    cleaned = evaluation_text.strip()
+    if cleaned.startswith('```'):
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+    cleaned = cleaned.strip()
+
+    logger.info(f"EVALUATION (cleaned) => {cleaned[:500]}")
 
     try:
-        result = json.loads(evaluation_text.strip('json').strip('`').strip().replace('json',''))
+        result = json.loads(cleaned)
         logger.info(f"RESULT {result}")
-        # score = result.get('score')
-        # feedback = result.get('feedback')
-        # result = {"total_score": score, "feedback": feedback}
 
-        logger.info(f"==>RESULT {result}" )
+        # Ensure all expected keys exist with safe defaults
+        result.setdefault('engagement_score', 0)
+        result.setdefault('empathy_score', 0)
+        result.setdefault('humor_score', 0)
+        result.setdefault('feedback', 'Evaluation completed.')
+
+        # Ensure scores are valid integers
+        for key in ['engagement_score', 'empathy_score', 'humor_score']:
+            try:
+                result[key] = int(result[key])
+            except (TypeError, ValueError):
+                logger.warning(f"Invalid score for {key}: {result[key]}, defaulting to 0")
+                result[key] = 0
+
+        logger.info(f"==>RESULT {result}")
 
         return result
-    except Exception as e:
-        logger.info(f"GOT ERROR EVALUATING {e}")
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.info(f"GOT ERROR EVALUATING JSON: {e}")
 
-        # Initialize a dictionary to hold the results
+        # Initialize a dictionary to hold the results with safe defaults
         evaluation_data = {
-            "engagement_score": None,
-            "engagement_feedback": None,
-            "humor_score": None,
-            "humor_feedback": None,
-            "empathy_score": None,
-            "empathy_feedback": None,
-            "total_score": None
+            "engagement_score": 0,
+            "engagement_feedback": "",
+            "humor_score": 0,
+            "humor_feedback": "",
+            "empathy_score": 0,
+            "empathy_feedback": "",
+            "total_score": 0,
+            "feedback": "Evaluation completed."
         }
 
         # Define regex patterns for each score and explanation
